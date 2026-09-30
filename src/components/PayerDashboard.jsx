@@ -42,7 +42,7 @@ export default function PayerDashboard({ state, onIssue, onRegisterBusiness, onA
         {PTABS.map((t) => (
           <button
             key={t.k}
-            onClick={() => setPtab(t.k)}
+            onClick={() => setPtab(t.k)} style={{ flex: '0 0 auto', width: 'auto', minWidth: 'max-content', overflow: 'visible' }}
             className={`tap-target shrink-0 flex items-center gap-2 px-4 h-10 rounded-full text-[12px] font-bold whitespace-nowrap ${ptab === t.k ? 'bg-slate-900 text-white shadow-lg' : 'bg-white border border-slate-200 text-slate-500'}`}
           >
             <i className={`${t.icon} text-base`}></i>{t.l}
