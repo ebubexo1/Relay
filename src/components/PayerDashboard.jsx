@@ -20,6 +20,11 @@ const PTABS = [
 
 export default function PayerDashboard({ state, onIssue, onRegisterBusiness, onAddWorker, onRemoveWorker, onPayWorkers, onCreateReceipt, onLockEscrow, onSaveCard, onAddDocument, onRemoveDocument, onRemoveCard }) {
   const [ptab, setPtab] = useState('overview')
+  const [tabEdge, setTabEdge] = useState({ left: false, right: true })
+  function onTabsScroll(e) {
+    const el = e.currentTarget
+    setTabEdge({ left: el.scrollLeft > 4, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4 })
+  }
   const [showSearch, setShowSearch] = useState(false)
   const [query, setQuery] = useState('')
 
@@ -39,7 +44,16 @@ export default function PayerDashboard({ state, onIssue, onRegisterBusiness, onA
   return (
     <div className="space-y-4">
       <div className="relative">
-        <div id="ptabs" className="flex gap-2 overflow-x-auto no-scrollbar scroll-smooth pr-12">
+        {tabEdge.left && (
+          <button
+            onClick={() => document.getElementById('ptabs').scrollBy({ left: -160, behavior: 'smooth' })}
+            className="absolute left-0 top-0 z-10 w-10 h-10 rounded-full bg-white border border-slate-200 shadow-md flex items-center justify-center text-slate-700"
+            title="Previous tabs"
+          >
+            <i className="ph-bold ph-caret-left"></i>
+          </button>
+        )}
+        <div id="ptabs" onScroll={onTabsScroll} className="flex gap-2 overflow-x-auto no-scrollbar scroll-smooth pr-12">
           {PTABS.map((t) => (
             <button
               key={t.k}
@@ -51,13 +65,15 @@ export default function PayerDashboard({ state, onIssue, onRegisterBusiness, onA
             </button>
           ))}
         </div>
-        <button
-          onClick={() => document.getElementById('ptabs').scrollBy({ left: 160, behavior: 'smooth' })}
-          className="absolute right-0 top-0 w-10 h-10 rounded-full bg-white border border-slate-200 shadow-md flex items-center justify-center text-slate-700"
-          title="More tabs"
-        >
-          <i className="ph-bold ph-caret-right"></i>
-        </button>
+        {tabEdge.right && (
+          <button
+            onClick={() => document.getElementById('ptabs').scrollBy({ left: 160, behavior: 'smooth' })}
+            className="absolute right-0 top-0 z-10 w-10 h-10 rounded-full bg-white border border-slate-200 shadow-md flex items-center justify-center text-slate-700"
+            title="More tabs"
+          >
+            <i className="ph-bold ph-caret-right"></i>
+          </button>
+        )}
       </div>
 
       {ptab === 'overview' && (
