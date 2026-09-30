@@ -2,7 +2,6 @@ import { useState } from 'react'
 import Field from './Field'
 import Btn from './Btn'
 import { fmt } from '../lib/format'
-import Knob from './Knob'
 import PuppyDesk from './PuppyDesk'
 import TextInput from './TextInput'
 

@@ -1,4 +1,4 @@
-# Pxxl deployment contract — Relay (static web app + notify API).
+# Pxxl deployment contract — Relay (static web + notify API + FastAPI backend).
 # Aliases here must match the saved service aliases in the Pxxl dashboard.
 # Secrets go in dashboard environment variables, NEVER in this file.
 version = 1
@@ -22,3 +22,12 @@ packageManager = "npm"
 installCommand = "npm install --no-audit --no-fund"
 startCommand = "node relay-notify.js"
 port = 3001
+
+[services.backend]
+baseDirectory = "backend"
+language = "python"
+framework = "fastapi"
+packageManager = "pip"
+installCommand = "pip install -r requirements.txt"
+startCommand = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+port = 8000

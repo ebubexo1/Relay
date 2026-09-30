@@ -4,3 +4,7 @@ dist
 *.local
 .env
 server/node_modules
+__pycache__/
+*.db
+backend/uploads/*
+!backend/uploads/.gitkeep

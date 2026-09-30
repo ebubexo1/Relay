@@ -172,6 +172,68 @@ body {
   color: #fff;
 }
 
+/* ---- Mobile-first polish: type scale, touch rhythm, safe areas ---- */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  min-height: 100dvh;
+  overscroll-behavior-y: none;
+}
+input,
+textarea,
+select,
+button {
+  font: inherit;
+}
+input[type='number'] {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Larger, calmer type on small phones; tighter tracking on desktop */
+h1 {
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+p {
+  text-wrap: pretty;
+}
+
+@media (max-width: 380px) {
+  .fluid-display {
+    font-size: clamp(26px, 9vw, 34px);
+  }
+  .glass-card {
+    border-radius: 22px;
+  }
+}
+
+/* Bottom sheets clear the home indicator; content never hides under nav */
+.panel-sheet {
+  padding-bottom: calc(34px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Icons scale with text instead of fixed px */
+i[class*='ph-'] {
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+/* Visible press feedback on touch (no hover on mobile) */
+@media (hover: none) {
+  button:active,
+  .btn-invert:active {
+    transform: scale(0.97);
+  }
+}
+
+/* Focus that survives small screens */
+:focus-visible {
+  outline: 2px solid #0f172a;
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .panel-sheet,
   .btn-invert,

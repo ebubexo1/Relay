@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { fmt } from '../lib/format'
+import { api, reachable } from '../lib/api'
 
 const MIN_PCT = 0
 const MAX_PCT = 20
@@ -215,6 +216,34 @@ function Wheel({ label, value, lo, hi, onChange }) {
   )
 }
 
+// Server snapshot -> local Puppy shape (same state model, real backend truth).
+function serverToLocal(snap) {
+  const c = snap.config || {}
+  return {
+    puppy: {
+      on: !!c.puppy_on,
+      mood: c.puppy_mood || 'idle',
+      phase: c.puppy_phase || 'watching',
+      next: c.puppy_next || 0,
+      until: c.puppy_until || 0,
+      target: c.puppy_target || null,
+      disc: c.puppy_disc || 0,
+    },
+    market: (snap.market || []).map((m) => ({
+      id: m.id, seller: m.seller, face: m.face, sellerMax: m.seller_max,
+      settlement: m.settlement, state: m.state, why: m.why || '',
+    })),
+    bids: (snap.bids || []).map((b) => ({
+      id: b.id, seller: b.seller, face: b.face, disc: b.disc, pay: b.pay,
+      settlement: b.settlement, stage: b.stage, next: b.next_at, willAccept: !!b.will_accept,
+    })),
+    earnings: c.earnings || 0,
+    capital: c.capital ?? 500000,
+    log: (snap.log || []).map((l) => ({ t: l.t, at: l.at })),
+    lastSpawn: c.last_spawn || 0,
+  }
+}
+
 export default function PuppyDesk({ state, setAppState, onUpdateLPSettings }) {
   const lp = getLP(state)
   const st = state.accounts.personal.lpSettings || {}
@@ -222,10 +251,23 @@ export default function PuppyDesk({ state, setAppState, onUpdateLPSettings }) {
   const max = st.maxDiscount ?? 8
   const hasCard = !!state.accounts.personal.card
   const running = lp.puppy.on || lp.bids.some((b) => b.next < NEVER)
+  const server = useRef(null) // null = unknown, true/false = probed
+
+  useEffect(() => {
+    let live = true
+    reachable().then((ok) => { if (live) server.current = ok })
+    return () => { live = false }
+  }, [])
 
   useEffect(() => {
     if (!running) return
     const id = setInterval(() => {
+      if (server.current) {
+        api.puppyTick()
+          .then((snap) => setAppState((prev) => ({ ...prev, lp: serverToLocal(snap) })))
+          .catch(() => { server.current = false })
+        return
+      }
       setAppState((prev) => {
         const cur = getLP(prev)
         const s = prev.accounts.personal.lpSettings || {}
@@ -241,11 +283,16 @@ export default function PuppyDesk({ state, setAppState, onUpdateLPSettings }) {
 
   function toggle() {
     if (!lp.puppy.on && !hasCard) return
+    if (server.current) {
+      // Mirror the switch server-side too; local state still updates below.
+      ;(lp.puppy.on ? api.puppyOff() : api.puppyOn()).catch(() => { server.current = false })
+    }
     patch((cur) => cur.puppy.on
       ? { ...cur, puppy: { ...cur.puppy, on: false, mood: 'idle', phase: 'watching' }, log: logLine(cur, 'Puppy paused') }
       : { ...cur, puppy: { ...cur.puppy, on: true, mood: 'watching', phase: 'watching', next: Date.now() }, log: logLine(cur, 'Puppy is watching for promises') })
   }
   function sendPromise() {
+    if (server.current) api.marketInject().catch(() => { server.current = false })
     patch((cur) => {
       const now = Date.now()
       const m = newPromise(now)

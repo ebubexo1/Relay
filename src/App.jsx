@@ -21,6 +21,7 @@ import LPDashboard from './components/LPDashboard'
 import AdminBoard from './components/AdminBoard'
 import ReceiptZoom from './components/ReceiptZoom'
 import { notifyIssued } from './lib/notify'
+import { api, setToken } from './lib/api'
 
 function loadSaved(key, fallback) {
   try {
@@ -192,10 +193,11 @@ export default function App() {
     }, 900)
   }
 
-  /* ---- Liquidity / Auction ---- */
+  /* ---- Liquidity / Auction (backend-first, local fallback) ---- */
   const [auctionStage, setAuctionStage] = useState('idle')
   const [offers, setOffers] = useState([])
   const [selectedOffer, setSelectedOffer] = useState(null)
+  const [auctionId, setAuctionId] = useState(null)
   const [lqMin, setLqMin] = useState(0)
   const [lqTarget, setLqTarget] = useState(0)
 
@@ -208,15 +210,28 @@ export default function App() {
     setLiquidityClaimId(target.id)
     setAuctionStage('idle')
     setSelectedOffer(null)
+    setAuctionId(null)
     setLqMin(Math.round(target.remaining * 0.94))
     setLqTarget(Math.round(target.remaining * 0.985))
     setActivePanel('liquidity')
   }
 
-  function runAuction() {
+  async function runAuction() {
     const target = state.promises.find((x) => x.id === liquidityClaimId)
     if (!target) return
     setAuctionStage('searching')
+
+    // Real auction: registered LP ranges bid server-side, speed cutoff,
+    // best payout wins. Falls back to the local pool when offline.
+    try {
+      const r = await api.createAuction(target.id)
+      setAuctionId(r.auction_id)
+      setOffers(r.bids.map((b) => ({ id: b.id, name: b.bidder_name + ' · ' + b.discount + '%', amount: b.amount, responseMs: b.response_ms })))
+      setAuctionStage('offers')
+      return
+    } catch {
+      setAuctionId(null)
+    }
 
     // Simulated LP pool, each with its own accepted discount range.
     // If the signed-in user has LP mode on, their own wheels-based
@@ -255,7 +270,14 @@ export default function App() {
     }, fastCutoff)
   }
 
-  function acceptOffer(pr) {
+  async function acceptOffer(pr) {
+    if (pr.id && auctionId) {
+      try {
+        await api.acceptBid(auctionId, pr.id)
+      } catch {
+        // local state still updates below
+      }
+    }
     setState((prev) => ({
       ...prev,
       available: prev.available + pr.amount,
@@ -490,6 +512,31 @@ export default function App() {
         <Auth
           initialPhone={state.accounts.personal.phone}
           onComplete={(result) => {
+            // Mirror the account on the backend (best-effort: demo keeps working offline).
+            ;(async () => {
+              try {
+                if (result.type === 'personal') {
+                  try {
+                    setToken((await api.login(result.phone, result.pin)).token)
+                  } catch {
+                    setToken((await api.register(result.phone, result.pin)).token)
+                  }
+                } else if (result.type === 'payer') {
+                  setToken((await api.registerPayer({
+                    business_name: result.payer.businessName,
+                    business_email: result.payer.businessEmail || '',
+                    phone: result.payer.phone || '',
+                    rc: result.payer.rc || '',
+                    business_type: result.payer.businessType || 'employer',
+                    pin: result.payer.pin,
+                  })).token)
+                } else {
+                  try {
+                    setToken((await api.login('admin', 'relay-admin')).token)
+                  } catch {}
+                }
+              } catch {}
+            })()
             setState((prev) => {
               const accounts = { ...prev.accounts }
               let session, user
@@ -525,11 +572,13 @@ export default function App() {
   }
 
   function toggleLPMode() {
+    const turningOn = !state.accounts.personal.isLP
     setState((prev) => ({
       ...prev,
       accounts: { ...prev.accounts, personal: { ...prev.accounts.personal, isLP: !prev.accounts.personal.isLP } },
       user: { ...prev.user, isLP: !prev.accounts.personal.isLP },
     }))
+    if (turningOn) api.lpActivate().catch(() => {})
   }
 
   function acceptNotification(id) {
@@ -553,6 +602,7 @@ export default function App() {
       ...prev,
       accounts: { ...prev.accounts, personal: { ...prev.accounts.personal, lpSettings: { minDiscount, maxDiscount } } },
     }))
+    api.lpConfig(minDiscount, maxDiscount).catch(() => {})
   }
 
   function saveLPCard(cardNumber, expiry, name) {
@@ -562,6 +612,7 @@ export default function App() {
       ...prev,
       accounts: { ...prev.accounts, personal: { ...prev.accounts.personal, card: { last4, expiry, name } } },
     }))
+    if (last4.length === 4) api.lpCard(last4, name, expiry).catch(() => {})
     showToast('Card on file updated - settlement will route here')
   }
 
