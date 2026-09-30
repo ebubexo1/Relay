@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import TextInput from './TextInput'
 import Btn from './Btn'
+import LPAuth from './LPAuth'
 
 const DEMO_CODE = '8472'
 const DEMO_ADMIN_PASSCODE = 'RELAY-STAFF-2026' // stand-in for real staff provisioning — see note in AdminGate
@@ -36,6 +37,17 @@ function EntryChooser({ onPick }) {
         <span>
           <span className="block text-[14px] font-bold">Business (Payer) account</span>
           <span className="block text-[11.5px] text-slate-400">Register a business to issue verified promises to people you pay</span>
+        </span>
+      </button>
+
+      <button
+        onClick={() => onPick('lp')}
+        className="tap-target w-full text-left p-4 rounded-2xl border border-slate-200 bg-white btn-invert flex items-center gap-3 mt-2.5"
+      >
+        <i className="ph-fill ph-coins text-2xl shrink-0"></i>
+        <span>
+          <span className="block text-[14px] font-bold">Liquidity provider</span>
+          <span className="block text-[11.5px] text-slate-400">Apply to fund claims and earn a return - verified onboarding</span>
         </span>
       </button>
 
@@ -221,6 +233,7 @@ export default function Auth({ initialPhone, onComplete }) {
     null: 'Future money, spendable now.',
     personal: 'Sign in with your phone.',
     payer: 'Register your business to issue promises.',
+    lp: 'Apply to become a liquidity provider.',
     admin: 'Staff access — provisioned, not self-serve.',
   }[flow]
 
@@ -249,6 +262,13 @@ export default function Auth({ initialPhone, onComplete }) {
           <PayerAuth
             onBack={() => setFlow(null)}
             onComplete={(payer) => onComplete({ type: 'payer', payer })}
+          />
+        )}
+
+        {flow === 'lp' && (
+          <LPAuth
+            onBack={() => setFlow(null)}
+            onComplete={(result) => onComplete(result)}
           />
         )}
 

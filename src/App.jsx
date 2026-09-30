@@ -18,6 +18,7 @@ import Auth from './components/Auth'
 import Landing from './components/Landing'
 import PayerDashboard from './components/PayerDashboard'
 import LPDashboard from './components/LPDashboard'
+import { navFor, landingFor } from './lib/roles'
 import AdminBoard from './components/AdminBoard'
 import ReceiptZoom from './components/ReceiptZoom'
 import { notifyIssued } from './lib/notify'
@@ -86,6 +87,10 @@ export default function App() {
   }
 
   function go(t) {
+    if (t === 'signout') {
+      signOutNow()
+      return
+    }
     if (t === 'business' && state.session?.type !== 'payer') {
       showToast('Business dashboard is for Payer accounts - sign in as a business to access it')
       return
@@ -94,8 +99,8 @@ export default function App() {
       showToast('Admin board is staff-only - sign in with an admin account')
       return
     }
-    if (t === 'lp' && !(state.session?.type === 'personal' && state.accounts.personal.isLP)) {
-      showToast('Turn on Liquidity Provider mode in your profile to access the LP desk')
+    if (t === 'lp' && state.session?.type !== 'lp') {
+      showToast('The Liquidity Desk is for liquidity-provider accounts - sign in as a liquidity provider')
       return
     }
     setTab(t)
@@ -530,7 +535,7 @@ export default function App() {
                     business_type: result.payer.businessType || 'employer',
                     pin: result.payer.pin,
                   })).token)
-                } else {
+                } else if (result.type === 'admin') {
                   try {
                     setToken((await api.login('admin', 'relay-admin')).token)
                   } catch {}
@@ -550,6 +555,10 @@ export default function App() {
                 accounts.payer = { ...payerRest, pinSet: true, verified: false }
                 session = { type: 'payer' }
                 user = { phone: accounts.payer.phone, businessName: accounts.payer.businessName, businessEmail: accounts.payer.businessEmail, pinSet: true, role: 'payer', verified: false }
+              } else if (result.type === 'lp') {
+                accounts.lp = { ...result.lp, pinSet: true }
+                session = { type: 'lp' }
+                user = { role: 'lp', name: (result.lp && result.lp.name) || 'Liquidity provider' }
               } else {
                 session = { type: 'admin' }
                 user = { role: 'admin', name: 'Staff' }
@@ -557,7 +566,7 @@ export default function App() {
               return { ...prev, accounts, session, user }
             })
 
-            const landing = result.type === 'payer' ? 'business' : result.type === 'admin' ? 'admin' : 'home'
+            const landing = landingFor(result.type) || 'home'
             setTab(landing)
             setAuthed(true)
             showToast('Welcome to Relay')
@@ -569,6 +578,12 @@ export default function App() {
         <Toast message={toastMsg} show={toastShow} />
       </div>
     )
+  }
+
+  function signOutNow() {
+    setState((prev) => ({ ...prev, session: { type: null } }))
+    setAuthed(false)
+    setTab('home')
   }
 
   function toggleLPMode() {
@@ -674,14 +689,7 @@ export default function App() {
             </div>
           </div>
           <nav className="space-y-2">
-            {[
-              { key: 'home', label: 'Home', icon: 'ph-fill ph-house' },
-              { key: 'activity', label: 'Activity', icon: 'ph-bold ph-receipt' },
-              { key: 'business', label: 'Business', icon: 'ph-bold ph-bank' },
-              { key: 'lp', label: 'Liquidity Desk', icon: 'ph-bold ph-banknote' },
-              { key: 'admin', label: 'Verification', icon: 'ph-fill ph-shield-check' },
-              { key: 'me', label: 'Profile', icon: 'ph-bold ph-user' },
-            ].map((n) => (
+            {[...navFor(state.session?.type || 'personal'), ...((state.session?.type || 'personal') !== 'personal' ? [{ key: 'signout', label: 'Sign out', icon: 'ph-bold ph-sign-out' }] : [])].map((n) => (
               <button
                 key={n.key}
                 onClick={() => go(n.key)}
@@ -985,7 +993,7 @@ export default function App() {
                 <p className="font-bold text-[16px]">{state.user.phone}</p>
                 <p className="text-[12px] text-slate-400">Relay ID {state.user.relayId} · PIN {state.user.pinSet ? 'set · 2FA on' : 'not set'}</p>
               </div>
-              <button onClick={() => { setAuthed(false); setTab('home') }} className="w-11 h-11 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 tap-target" title="Sign out">
+              <button onClick={signOutNow} className="w-11 h-11 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 tap-target" title="Sign out">
                 <i className="ph-bold ph-sign-out text-lg"></i>
               </button>
             </div>
@@ -993,17 +1001,7 @@ export default function App() {
             <div className="glass-card rounded-[28px] p-5 mb-4">
               <h3 className="font-bold text-[15px] mb-3">Workspace</h3>
               <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-400 mb-2">Signed in as · {state.session?.type || 'personal'}</p>
-              {state.session?.type === 'personal' ? (
-                <button
-                  onClick={toggleLPMode}
-                  className={`tap-target w-full rounded-2xl border py-3 flex items-center justify-center gap-2 ${state.accounts.personal.isLP ? 'bg-slate-900 text-white border-slate-900' : 'bg-white border-slate-200 text-slate-500'}`}
-                >
-                  <i className="ph-fill ph-banknote text-lg"></i>
-                  <span className="text-[13px] font-bold">{state.accounts.personal.isLP ? 'Also acting as Liquidity Provider' : 'Also act as Liquidity Provider'}</span>
-                </button>
-              ) : (
-                <p className="text-[12px] text-slate-400">Payer and Admin are separate accounts — sign out and sign in as that account type to switch.</p>
-              )}
+              <p className="text-[12px] text-slate-400">Your account type is fixed at sign-up. To use a different account type, sign out and sign in (or register) as that type.</p>
             </div>
 
             <button onClick={() => go('business')} className="w-full dark-card rounded-[28px] p-5 text-white flex items-center gap-4 mb-4 text-left">
@@ -1039,24 +1037,39 @@ export default function App() {
         )}
       </main>
 
-      {/* Mobile bottom nav */}
+      {/* Mobile bottom nav - one set of tabs per account type */}
       <nav className="md:hidden fixed bottom-0 left-0 w-full z-50 p-4 pb-6 pointer-events-none">
         <div className="glass-panel pointer-events-auto rounded-[28px] flex justify-around items-center h-[72px] px-2 shadow-2xl">
-          <button onClick={() => go('home')} className={`flex flex-col items-center justify-center w-12 h-12 tap-target ${tab === 'home' ? 'text-slate-900' : 'text-slate-400'}`}>
-            <i className={`${tab === 'home' ? 'ph-fill ph-house' : 'ph-bold ph-house'} text-2xl`}></i>
-          </button>
-          <button onClick={() => go('activity')} className={`flex flex-col items-center justify-center w-12 h-12 tap-target ${tab === 'activity' ? 'text-slate-900' : 'text-slate-400'}`}>
-            <i className={`${tab === 'activity' ? 'ph-fill ph-receipt' : 'ph-bold ph-receipt'} text-2xl`}></i>
-          </button>
-          <button onClick={() => setActivePanel('pay')} className="w-14 h-14 -mt-10 bg-slate-900 rounded-full flex items-center justify-center shadow-[0_10px_30px_rgba(15,23,42,0.35)] border-[5px] border-[#eef1f4] hover:-translate-y-1 transition-transform tap-target" aria-label="Pay">
-            <i className="ph-bold ph-plus text-white text-xl"></i>
-          </button>
-          <button onClick={() => openLiquidity(null)} className="flex flex-col items-center justify-center w-12 h-12 text-slate-400 tap-target" aria-label="Cash out">
-            <i className="ph-bold ph-banknote text-2xl"></i>
-          </button>
-          <button onClick={() => go('me')} className={`flex flex-col items-center justify-center w-12 h-12 tap-target ${['me', 'business', 'lp', 'admin'].includes(tab) ? 'text-slate-900' : 'text-slate-400'}`}>
-            <i className={`${['me', 'business', 'lp', 'admin'].includes(tab) ? 'ph-fill ph-user' : 'ph-bold ph-user'} text-2xl`}></i>
-          </button>
+          {(state.session?.type || 'personal') === 'personal' ? (
+            <>
+              <button onClick={() => go('home')} className={`flex flex-col items-center justify-center w-12 h-12 tap-target ${tab === 'home' ? 'text-slate-900' : 'text-slate-400'}`}>
+                <i className={`${tab === 'home' ? 'ph-fill ph-house' : 'ph-bold ph-house'} text-2xl`}></i>
+              </button>
+              <button onClick={() => go('activity')} className={`flex flex-col items-center justify-center w-12 h-12 tap-target ${tab === 'activity' ? 'text-slate-900' : 'text-slate-400'}`}>
+                <i className={`${tab === 'activity' ? 'ph-fill ph-receipt' : 'ph-bold ph-receipt'} text-2xl`}></i>
+              </button>
+              <button onClick={() => setActivePanel('pay')} className="w-14 h-14 -mt-10 bg-slate-900 rounded-full flex items-center justify-center shadow-[0_10px_30px_rgba(15,23,42,0.35)] border-[5px] border-[#eef1f4] hover:-translate-y-1 transition-transform tap-target" aria-label="Pay">
+                <i className="ph-bold ph-plus text-white text-xl"></i>
+              </button>
+              <button onClick={() => openLiquidity(null)} className="flex flex-col items-center justify-center w-12 h-12 text-slate-400 tap-target" aria-label="Cash out">
+                <i className="ph-bold ph-banknote text-2xl"></i>
+              </button>
+              <button onClick={() => go('me')} className={`flex flex-col items-center justify-center w-12 h-12 tap-target ${tab === 'me' ? 'text-slate-900' : 'text-slate-400'}`}>
+                <i className={`${tab === 'me' ? 'ph-fill ph-user' : 'ph-bold ph-user'} text-2xl`}></i>
+              </button>
+            </>
+          ) : (
+            <>
+              {navFor(state.session?.type).map((n) => (
+                <button key={n.key} onClick={() => go(n.key)} className={`flex flex-col items-center justify-center w-16 h-12 tap-target ${tab === n.key ? 'text-slate-900' : 'text-slate-400'}`} aria-label={n.label}>
+                  <i className={`${n.icon} text-2xl`}></i>
+                </button>
+              ))}
+              <button onClick={signOutNow} className="flex flex-col items-center justify-center w-16 h-12 tap-target text-slate-400" aria-label="Sign out">
+                <i className="ph-bold ph-sign-out text-2xl"></i>
+              </button>
+            </>
+          )}
         </div>
       </nav>
 
